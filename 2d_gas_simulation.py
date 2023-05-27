@@ -3,13 +3,13 @@ import math
 from PIL import Image, ImageDraw
 
 class Particle:
-    def __init__(self, x, y, vx, vy, radius, mass):
+    def __init__(self, x, y, vx, vy, r, m):
         self.x = x
         self.y = y
         self.vx = vx
         self.vy = vy
-        self.radius = radius
-        self.mass = mass
+        self.r = r
+        self.m = m
 
 class GasSimulation:
     def __init__(self, L, N, m, r, V0, delta_t):
@@ -36,12 +36,12 @@ class GasSimulation:
             if is_valid:
                 self.particles.append(particle)
 
-    def update_positions(self):
+    def movement(self):
         for particle in self.particles:
             particle.x += particle.vx * self.delta_t
             particle.y += particle.vy * self.delta_t
 
-    def check_collisions(self):
+    def collisions(self):
         for i in range(self.N):
             for j in range(i + 1, self.N):
                 particle1 = self.particles[i]
@@ -53,16 +53,16 @@ class GasSimulation:
                     # Update velocities (elastic collision)
                     vx1, vy1 = particle1.vx, particle1.vy
                     vx2, vy2 = particle2.vx, particle2.vy
-                    particle1.vx = vx1 - (2 * particle2.mass * (vx1 - vx2)) / (particle1.mass + particle2.mass)
-                    particle1.vy = vy1 - (2 * particle2.mass * (vy1 - vy2)) / (particle1.mass + particle2.mass)
-                    particle2.vx = vx2 - (2 * particle1.mass * (vx2 - vx1)) / (particle1.mass + particle2.mass)
-                    particle2.vy = vy2 - (2 * particle1.mass * (vy2 - vy1)) / (particle1.mass + particle2.mass)
+                    particle1.vx = vx1 - (2 * particle2.m * (vx1 - vx2)) / (particle1.m + particle2.m)
+                    particle1.vy = vy1 - (2 * particle2.m * (vy1 - vy2)) / (particle1.m + particle2.m)
+                    particle2.vx = vx2 - (2 * particle1.m * (vx2 - vx1)) / (particle1.m + particle2.m)
+                    particle2.vy = vy2 - (2 * particle1.m * (vy2 - vy1)) / (particle1.m + particle2.m)
 
             # Check collisions with walls
             particle = self.particles[i]
-            if particle.x - particle.radius <= 0 or particle.x + particle.radius >= self.L:
+            if particle.x - particle.r <= 0 or particle.x + particle.r >= self.L:
                 particle.vx = -particle.vx
-            if particle.y - particle.radius <= 0 or particle.y + particle.radius >= self.L:
+            if particle.y - particle.r <= 0 or particle.y + particle.r >= self.L:
                 particle.vy = -particle.vy
 
     def simulate(self, num_steps):
@@ -76,8 +76,8 @@ class GasSimulation:
             frame = self.create_frame_image()
             frames.append(frame)
 
-            self.update_positions()
-            self.check_collisions()
+            self.movement()
+            self.collisions()
 
         # Save the frames as a GIF animation
         self.save_animation(frames)
@@ -92,10 +92,10 @@ class GasSimulation:
         draw = ImageDraw.Draw(image)
 
         for particle in self.particles:
-            x1 = int((particle.x - particle.radius) * scale_factor)
-            y1 = int((particle.y - particle.radius) * scale_factor)
-            x2 = int((particle.x + particle.radius) * scale_factor)
-            y2 = int((particle.y + particle.radius) * scale_factor)
+            x1 = int((particle.x - particle.r) * scale_factor)
+            y1 = int((particle.y - particle.r) * scale_factor)
+            x2 = int((particle.x + particle.r) * scale_factor)
+            y2 = int((particle.y + particle.r) * scale_factor)
 
             draw.ellipse([(x1, y1), (x2, y2)], fill='blue')
 
@@ -105,14 +105,20 @@ class GasSimulation:
         gif_path = 'gas_simulation.gif'
         frames[0].save(gif_path, save_all=True, append_images=frames[1:], optimize=False, duration=100, loop=0)
         print(f"GIF animation saved as '{gif_path}'")
+        
+    #def temperature
+    
+    #def boltzman
+    
+    
+    #def verification
 
-# Example usage
 L = 10  # Box volume (L^2)
 N = 100  # Number of particles
 m = 1  # Particle mass
 r = 0.1  # Particle radius
-V0 = 5  # Initial velocity
-delta_t = 0.01  # Time step
+V0 = 20  # Initial velocity
+delta_t = 0.005  # Time step
 num_steps = 1000  # Number of simulation steps
 
 simulation = GasSimulation(L, N, m, r, V0, delta_t)
