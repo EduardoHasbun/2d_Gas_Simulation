@@ -7,14 +7,11 @@ import time
 import numpy as np
 
 class Particle:
-    def __init__(self, x, y, vx, vy, r, m):
-        self.x = x
-        self.y = y
-        self.vx = vx
-        self.vy = vy
+    def __init__(self, X, V, r, m):
+        self.X = X
+        self.V = V
         self.r = r
         self.m = m
-
 
 class GasSimulation:
     def __init__(self, L, N, m, r, V0, dt):
@@ -35,31 +32,34 @@ class GasSimulation:
             theta = random.uniform(0, 2 * math.pi)
             vx = self.V0 * math.cos(theta)
             vy = self.V0 * math.sin(theta)
-            particle = Particle(x, y, vx, vy, self.r, self.m)
+            X = np.array([x,y])
+            V = np.array([vx,vy])
+            particle = Particle(X, V, self.r, self.m)
 
             # Check for intersections with existing particles
-            is_valid = all(math.sqrt((p.x - particle.x)**2 + (p.y - particle.y)**2) >= 2 * self.r for p in self.particles)
+            is_valid = all(math.sqrt((p.X[0] - particle.X[0])**2 + (p.X[1] - particle.X[1])**2) >= 2 * self.r for p in self.particles)
 
             if is_valid:
                 self.particles.append(particle)
 
     def movement(self):
         for particle in self.particles:
-            particle.x += particle.vx * self.dt
-            particle.y += particle.vy * self.dt
+            particle.X += particle.V*self.dt
             
     def calculate_pressure(self):
-        A = self.L**2
-        pressure = self.momentum/(self.dt*self.L**2*self.N)
+        pressure = self.momentum/(self.dt*self.L*self.N)
         return pressure
+    
     
     def calculate_temperature(self):
         E = 0
         for i in range (self.N):
             particle = self.particles[i]
-            E += 0.5*self.m*np.linalg.norm((particle.vx,particle.vy))**2
+            E += 0.5*self.m*np.linalg.norm((particle.V))**2
         T = (2/3)*E/(self.N*1.380649*10**-23)-273.15
         return T
+    
+    
     def momentum(self):
         return self.momentum
     
@@ -76,27 +76,26 @@ class GasSimulation:
             for j in range(i + 1, self.N):
                 particle1 = self.particles[i]
                 particle2 = self.particles[j]
-                dx = particle2.x - particle1.x
-                dy = particle2.y - particle1.y
-                distance = math.sqrt(dx**2 + dy**2)
+                distance = np.linalg.norm((particle1.X,particle2.X))
                 if distance <= 2 * self.r:  # Collision between particles
-                    vx1, vy1 = particle1.vx, particle1.vy
-                    vx2, vy2 = particle2.vx, particle2.vy
-                    particle1.vx = vx1 - (2 * particle2.m * (vx1 - vx2)) / (particle1.m + particle2.m)
-                    particle1.vy = vy1 - (2 * particle2.m * (vy1 - vy2)) / (particle1.m + particle2.m)
-                    particle2.vx = vx2 - (2 * particle1.m * (vx2 - vx1)) / (particle1.m + particle2.m)
-                    particle2.vy = vy2 - (2 * particle1.m * (vy2 - vy1)) / (particle1.m + particle2.m)
+                    V1,X1 = particle1.V,particle1.Po
+                    V2,X2 = particle2.V,particle2.Po
+                    r = (X1-X2)/(np.linalg.norm(X1-X2))
+                    q = -2*(self.m**2/(2*self.m))*(np.dot((V1-V2),r)*r)
+                    
+                    particle1.V += q/self.m
+                    particle2.V -= q/particle2.m
 
             # Check collisions with walls
             particle = self.particles[i]
-            if particle.x - particle.r <= 0 or particle.x + particle.r >= self.L:
-                particle.vx = -particle.vx
+            if particle.X[0] <= particle.r or particle.X[0] + particle.r >= self.L:
+                particle.V[0] = -particle.V[0]
                 self.wall_collisions += 1
-                self.momentum += 2*particle.m*abs(particle.vx)
-            if particle.y - particle.r <= 0 or particle.y + particle.r >= self.L:
-                particle.vy = -particle.vy
+                self.momentum += 2*particle.m*abs(particle.V[0])
+            if particle.X[1] - particle.r <= 0 or particle.X[1] + particle.r >= self.L:
+                particle.V[1] = -particle.V[1]
                 self.wall_collisions += 1
-                self.momentum += 2*particle.m*abs(particle.vy)
+                self.momentum += 2*particle.m*abs(particle.V[1])
                 
 
 
@@ -104,21 +103,21 @@ class GasSimulation:
         self.initialize_particles()
         
 
-        # frames = []
+        frames = []
 
         for _ in range(num_steps):
             # Create a new frame for each step
-            # frame = self.create_frame_image()
-            # frames.append(frame)
+            frame = self.create_frame_image()
+            frames.append(frame)
 
             self.movement()
             self.collisions()
             
 
-        # self.save_animation(frames)
+        self.save_animation(frames)
         
         #Obtain final velocities
-        velocities = [np.linalg.norm((p.vx,p.vy)) for p in self.particles]
+        velocities = [np.linalg.norm(p.V) for p in self.particles]
         pressure = self.calculate_pressure()
         temperature = self.calculate_temperature()
         momentum = self.momentum
@@ -130,13 +129,13 @@ class GasSimulation:
         print(f"Ideal gas:{ideal_gas}")
         
         
-        sns.kdeplot(velocities)
-        # plt.hist(velocities,bins=25, density=True, alpha=0.6, color='g',edgecolor='k',label='Histgram')
+        # sns.kdeplot(velocities)
+        # # plt.hist(velocities,bins=25, density=True, alpha=0.6, color='g',edgecolor='k',label='Histgram')
         
-        plt.xlabel('Velocity')
-        plt.ylabel('Density')
-        plt.title('Velocity Distribution')
-        plt.show()
+        # plt.xlabel('Velocity')
+        # plt.ylabel('Density')
+        # plt.title('Velocity Distribution')
+        # plt.show()
     
 
     def create_frame_image(self):
@@ -149,10 +148,10 @@ class GasSimulation:
         draw = ImageDraw.Draw(image)
 
         for particle in self.particles:
-            x1 = int((particle.x - particle.r) * scale_factor)
-            y1 = int((particle.y - particle.r) * scale_factor)
-            x2 = int((particle.x + particle.r) * scale_factor)
-            y2 = int((particle.y + particle.r) * scale_factor)
+            x1 = int((particle.X[0] - particle.r) * scale_factor)
+            y1 = int((particle.X[1] - particle.r) * scale_factor)
+            x2 = int((particle.X[0] + particle.r) * scale_factor)
+            y2 = int((particle.X[1] + particle.r) * scale_factor)
 
             draw.ellipse([(x1, y1), (x2, y2)], fill='blue')
 
@@ -164,7 +163,7 @@ class GasSimulation:
         print(f"GIF animation saved as '{gif_path}'")
         
 
-L = 4  # Box volume (L^2)
+L = 10  # Box volume (L^2)
 N = 100  # Number of particles
 m = 1  # Particle mass
 r = 0.05  # Particle radius
