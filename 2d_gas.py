@@ -84,6 +84,7 @@ class GasSimulation:
         ).flatten()
 
         # Update velocities of particles hitting walls
+        momentum = 0
         for i in hitting_walls:
             particle = self.particles[i]
             momentum = 0 
@@ -93,20 +94,41 @@ class GasSimulation:
             if particle.X[1] - particle.r <= 0 or particle.X[1] + particle.r >= self.L:
                 particle.V[1] = -particle.V[1]
                 momentum += 2*self.m*abs(particle.V[1])
-        self.momentum = momentum
+        presssure = momentum/(4*self.L*self.dt*self.num_steps)
+        
+        return presssure
 
     def update_position(self):
         for particle in self.particles:
             particle.X += particle.V * self.dt
+            
+    def temperature(self):
+        total_kinetic_energy  = sum(0.5*self.m*np.linalg.norm(particle.V)**2 for particle in self.particles)
+        avarege_kinetic_energy = total_kinetic_energy/self.N
+        temperature = (2/3)*avarege_kinetic_energy/(1.380649*10**-23)
+        return temperature
+    
+    
+    def residual(self,P,T):
+        rhs = P*self.L**2
+        lhs = self.N*1.380649*10**-23*T
+        residual = rhs-lhs
+        return residual
+    
 
     def simulate(self):
         self.initialize_particles()
         pbar = log_progress(range(self.num_steps))
         frames = []
+        residual =[]
 
         for _ in pbar:
             self.collisions_particles()
-            self.collisions_walls()
+            pressure = self.collisions_walls()
+            temperature = self.temperature()
+            residual.append(self.residual(pressure,temperature))
+            
+            # self.collisions_walls()
             self.update_position()
 
             if self.create_gif:
@@ -117,6 +139,9 @@ class GasSimulation:
             self.save_animation(frames)
 
         self.plot_velocity()
+        plt.plot(residual)
+        plt.show()
+        
         
         
 
