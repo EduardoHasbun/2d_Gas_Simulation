@@ -90,10 +90,10 @@ class GasSimulation:
             momentum = 0 
             if particle.X[0] <= particle.r or particle.X[0] + particle.r >= self.L:
                 particle.V[0] = -particle.V[0]
-                momentum += 2*self.m*abs(particle.V[0])
+                momentum += self.m*abs(particle.V[0])
             if particle.X[1] - particle.r <= 0 or particle.X[1] + particle.r >= self.L:
                 particle.V[1] = -particle.V[1]
-                momentum += 2*self.m*abs(particle.V[1])
+                momentum += self.m*abs(particle.V[1])
         presssure = momentum/(4*self.L*self.dt*self.num_steps)
         
         return presssure
@@ -105,7 +105,8 @@ class GasSimulation:
     def temperature(self):
         total_kinetic_energy  = sum(0.5*self.m*np.linalg.norm(particle.V)**2 for particle in self.particles)
         avarege_kinetic_energy = total_kinetic_energy/self.N
-        temperature = (2/3)*avarege_kinetic_energy/(1.380649*10**-23)
+        # temperature = (2/3)*avarege_kinetic_energy/(1.380649*10**-23)
+        temperature = avarege_kinetic_energy/(self.N*1.380649*10**-23)
         return temperature
     
     
@@ -120,7 +121,7 @@ class GasSimulation:
         self.initialize_particles()
         pbar = log_progress(range(self.num_steps))
         frames = []
-        residual =[]
+        residual = []
 
         for _ in pbar:
             self.collisions_particles()
@@ -147,7 +148,7 @@ class GasSimulation:
 
     def create_frame_image(self):
         scale_factor = 40
-
+        
         image_width = int(self.L * scale_factor)
         image_height = int(self.L * scale_factor)
 
