@@ -6,6 +6,7 @@ import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 from PIL import Image, ImageDraw
+from scipy.stats import maxwell
 
 
 class Particle:
@@ -90,11 +91,11 @@ class GasSimulation:
             momentum = 0 
             if particle.X[0] <= particle.r or particle.X[0] + particle.r >= self.L:
                 particle.V[0] = -particle.V[0]
-                momentum += self.m*abs(particle.V[0])
+                momentum += 2*self.m*abs(particle.V[0])
             if particle.X[1] - particle.r <= 0 or particle.X[1] + particle.r >= self.L:
                 particle.V[1] = -particle.V[1]
-                momentum += self.m*abs(particle.V[1])
-        presssure = momentum/(4*self.L*self.dt*self.num_steps)
+                momentum += 2*self.m*abs(particle.V[1])
+        presssure = momentum/(4*self.L*self.dt)
         
         return presssure
 
@@ -105,8 +106,7 @@ class GasSimulation:
     def temperature(self):
         total_kinetic_energy  = sum(0.5*self.m*np.linalg.norm(particle.V)**2 for particle in self.particles)
         avarege_kinetic_energy = total_kinetic_energy/self.N
-        # temperature = (2/3)*avarege_kinetic_energy/(1.380649*10**-23)
-        temperature = avarege_kinetic_energy/(self.N*1.380649*10**-23)
+        temperature = avarege_kinetic_energy/(1.380649*10**-23)
         return temperature
     
     
@@ -116,18 +116,22 @@ class GasSimulation:
         residual = rhs-lhs
         return residual
     
-
+    
     def simulate(self):
         self.initialize_particles()
         pbar = log_progress(range(self.num_steps))
         frames = []
-        residual = []
+        residual_list = []
+        pressure_list = []
+        temperature_list = []
 
         for _ in pbar:
             self.collisions_particles()
             pressure = self.collisions_walls()
+            pressure_list.append(pressure)
             temperature = self.temperature()
-            residual.append(self.residual(pressure,temperature))
+            temperature_list.append(temperature)
+            residual_list.append(self.residual(pressure,temperature))
             
             # self.collisions_walls()
             self.update_position()
@@ -139,9 +143,7 @@ class GasSimulation:
         if self.create_gif:
             self.save_animation(frames)
 
-        self.plot_velocity()
-        plt.plot(residual)
-        plt.show()
+        self.post_processing(pressure_list,temperature_list,residual_list)
         
         
         
@@ -169,13 +171,37 @@ class GasSimulation:
         gif_path = os.path.join(self.dir_path, 'gas_simulation.gif')
         frames[0].save(gif_path, save_all=True, append_images=frames[1:], optimize=False, duration=100, loop=0)
         print(f"GIF animation saved as '{gif_path}'")
+        
+    def post_processing(self,pressure,temperature,residual):
+        print(f'Pressure = {np.average(pressure)}[Pa]')
+        print(f'Temperature = {np.average(temperature)}[K]')
+        print(f'Residual = {np.average(residual)}[-]')
+        self.plot_velocity()
+        self.plot_residual(residual)
 
     def plot_velocity(self):
         velocities = [np.linalg.norm(particle.V) for particle in self.particles]
-
-        sns.histplot(velocities, stat='density', label='Simulation', color='#9dbbeb', edgecolor='#e9f2f1')
-
-        plt.savefig(os.path.join(self.dir_path, 'velocity_distribution.png'))
+        
+        fig, ax = plt.subplots()
+        sns.histplot(velocities, stat='density', label='Histogram Simulation', color='#9dbbeb', edgecolor='#e9f2f1')
+        sns.kdeplot(velocities,color='k',label='Line Simulation')
+        params = maxwell.fit(velocities)
+        x = np.linspace(0, np.max(velocities), 100)
+        y = maxwell.pdf(x, *params)
+        sns.lineplot(x=x, y=y, color='b', label='Fitted Distribution', ax=ax)
+        ax.grid(True)
+        ax.set_xlabel('Velocity')
+        ax.set_ylabel('Density')
+        ax.legend()
+        fig.savefig(os.path.join(self.dir_path, 'velocity_distribution.png'))
+        
+    def plot_residual(self,residual):
+        fig,ax = plt.subplots()
+        plt.plot(residual,label='Residual')
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Residual')
+        ax.legend()
+        fig.savefig(os.path.join(self.dir_path, 'residual.png'))
 
 
 L = 6  # Box volume (L^2)
