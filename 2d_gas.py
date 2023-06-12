@@ -1,4 +1,3 @@
-import random
 import math
 import numpy as np
 from tqdm import tqdm as log_progress
@@ -29,15 +28,36 @@ class GasSimulation:
         self.dir_path = 'results'
         self.num_steps = num_steps
         self.create_gif = create_gif
+        self.Kb = 1.380649*10**-23
+        self.pressure_list = []
+        self.residual_list = []
+        
+
+
+######################                 UTILS FUNCTIONS             #############################################
+        
+    def propeties(self):
+        self.energy = sum(0.5*self.m*np.linalg.norm(particle.V)**2 for particle in self.particles)  
+        self.temperature = self.energy/(self.N*self.Kb)
+        
+        
+    def residual(self):
+        rhs = self.pressure*self.L**2                                 
+        lhs = self.N*self.Kb*self.temperature
+        self.residual_list.append(rhs-lhs)
+    
+    
+    
+########################         SIMULATION FUNCTIONS           ###########################################
         
 
     def initialize_particles(self):
         print('Creating particles')
         existing_positions = set()
         while len(self.particles) < self.N:
-            x = random.uniform(self.r * self.V0 * self.dt, self.L - self.r * self.V0 * self.dt)
-            y = random.uniform(self.r * self.V0 * self.dt, self.L - self.r * self.V0 * self.dt)
-            theta = random.uniform(0, 2 * math.pi)
+            x = np.random.uniform(self.r * self.V0 * self.dt, self.L - self.r * self.V0 * self.dt)
+            y = np.random.uniform(self.r * self.V0 * self.dt, self.L - self.r * self.V0 * self.dt)
+            theta = np.random.uniform(0, 2 * math.pi)
             vx = self.V0 * math.cos(theta)
             vy = self.V0 * math.sin(theta)
             X = np.array([x, y])
@@ -45,15 +65,16 @@ class GasSimulation:
             particle = Particle(X, V, self.r, self.m)
 
             # Check for intersections with existing particles using set
-            is_valid = all(
-                math.sqrt(np.sum((p.X - particle.X) ** 2)) >= 2 * self.r for p in existing_positions
-            )
+            is_valid = all(math.sqrt(np.sum((p.X - particle.X) ** 2)) >= 2 * self.r for p in existing_positions)
 
             if is_valid:
                 self.particles.append(particle)
                 existing_positions.add(particle)
 
         print('Particles Created')
+        
+        
+        
 
     def collisions_particles(self):
         # Create arrays of particle positions and velocities
@@ -73,6 +94,8 @@ class GasSimulation:
             q = -2 * (self.m ** 2 / (2 * self.m)) * (np.dot((particle1.V - particle2.V), r) * r)
             particle1.V += q / self.m
             particle2.V -= q / particle2.m
+            
+                   
 
     def collisions_walls(self):
         # Create arrays of particle positions
@@ -81,60 +104,40 @@ class GasSimulation:
         # Find particles hitting the walls
         hitting_walls = np.argwhere(
             (positions[:, 0] <= self.r) | (positions[:, 0] + self.r >= self.L) |
-            (positions[:, 1] - self.r <= 0) | (positions[:, 1] + self.r >= self.L)
-        ).flatten()
+            (positions[:, 1] - self.r <= 0) | (positions[:, 1] + self.r >= self.L)).flatten()
 
         # Update velocities of particles hitting walls
-        momentum = 0
         for i in hitting_walls:
+            momentum_change = 0
             particle = self.particles[i]
-            momentum = 0 
             if particle.X[0] <= particle.r or particle.X[0] + particle.r >= self.L:
                 particle.V[0] = -particle.V[0]
-                momentum += 2*self.m*abs(particle.V[0])
+                momentum_change += self.m * abs(particle.V[0])*2
             if particle.X[1] - particle.r <= 0 or particle.X[1] + particle.r >= self.L:
                 particle.V[1] = -particle.V[1]
-                momentum += 2*self.m*abs(particle.V[1])
-        presssure = momentum/(4*self.L*self.dt)
+                momentum_change += self.m * abs(particle.V[1])*2
+
+        pressure = momentum_change/(self.dt*4*self.L)
+        self.pressure_list.append(pressure)
         
-        return presssure
+        
 
     def update_position(self):
         for particle in self.particles:
             particle.X += particle.V * self.dt
-            
-    def temperature(self):
-        total_kinetic_energy  = sum(0.5*self.m*np.linalg.norm(particle.V)**2 for particle in self.particles)
-        avarege_kinetic_energy = total_kinetic_energy/self.N
-        temperature = avarege_kinetic_energy/(1.380649*10**-23)
-        return temperature
     
-    
-    def residual(self,P,T):
-        rhs = P*self.L**2
-        lhs = self.N*1.380649*10**-23*T
-        residual = rhs-lhs
-        return residual
-    
-    
+
     def simulate(self):
         self.initialize_particles()
+        self.propeties()
         pbar = log_progress(range(self.num_steps))
         frames = []
-        residual_list = []
-        pressure_list = []
-        temperature_list = []
 
         for _ in pbar:
             self.collisions_particles()
-            pressure = self.collisions_walls()
-            pressure_list.append(pressure)
-            temperature = self.temperature()
-            temperature_list.append(temperature)
-            residual_list.append(self.residual(pressure,temperature))
-            
-            # self.collisions_walls()
+            self.collisions_walls()
             self.update_position()
+            self.residual()
 
             if self.create_gif:
                 frame = self.create_frame_image()
@@ -142,11 +145,54 @@ class GasSimulation:
 
         if self.create_gif:
             self.save_animation(frames)
+            
+            
+        self.post_processing()
+        
+    
+    
+  #####################################   POST PROCESSING FUNCTIONS   #########################################  
+    
+    
+    def post_processing(self):
+        print(f'Pressure = {np.average(self.pressure_list)}[Pa]')
+        print(f'Energy = {self.energy}[J]')
+        print(f'Temperature = {self.temperature}[K]')
+        print(f'Residual = {np.average(self.residual_list)}[-]')
+        self.plot_velocity()
+        self.plot_residual()
+        
+        
 
-        self.post_processing(pressure_list,temperature_list,residual_list)
+    def plot_velocity(self):
+        velocities = [np.linalg.norm(particle.V) for particle in self.particles]
+        
+        fig, ax = plt.subplots()
+        sns.histplot(velocities, stat='density', label='Histogram Simulation', color='#9dbbeb', edgecolor='#e9f2f1')
+        sns.kdeplot(velocities,color='k',label='Line Simulation')
+        params = maxwell.fit(velocities)
+        x = np.linspace(0, np.max(velocities), 100)
+        y = maxwell.pdf(x, *params)
+        sns.lineplot(x=x, y=y, color='b', label='Fitted Distribution', ax=ax)
+        ax.grid(True)
+        ax.set_xlabel('Velocity')
+        ax.set_ylabel('Density')
+        ax.legend()
+        fig.savefig(os.path.join(self.dir_path, 'velocity_distribution.png'))
         
         
-        
+    def plot_residual(self):
+        fig,ax = plt.subplots()
+        plt.plot(self.residual_list,label='Residual')
+        ax.set_xlabel('Iteration')
+        ax.set_ylabel('Residual')
+        ax.legend()
+        fig.savefig(os.path.join(self.dir_path, 'residual.png'))
+
+
+
+
+############################       GIF ANIMATION FUNCTIONS                         ##########################
 
     def create_frame_image(self):
         scale_factor = 40
@@ -172,46 +218,21 @@ class GasSimulation:
         frames[0].save(gif_path, save_all=True, append_images=frames[1:], optimize=False, duration=100, loop=0)
         print(f"GIF animation saved as '{gif_path}'")
         
-    def post_processing(self,pressure,temperature,residual):
-        print(f'Pressure = {np.average(pressure)}[Pa]')
-        print(f'Temperature = {np.average(temperature)}[K]')
-        print(f'Residual = {np.average(residual)}[-]')
-        self.plot_velocity()
-        self.plot_residual(residual)
-
-    def plot_velocity(self):
-        velocities = [np.linalg.norm(particle.V) for particle in self.particles]
-        
-        fig, ax = plt.subplots()
-        sns.histplot(velocities, stat='density', label='Histogram Simulation', color='#9dbbeb', edgecolor='#e9f2f1')
-        sns.kdeplot(velocities,color='k',label='Line Simulation')
-        params = maxwell.fit(velocities)
-        x = np.linspace(0, np.max(velocities), 100)
-        y = maxwell.pdf(x, *params)
-        sns.lineplot(x=x, y=y, color='b', label='Fitted Distribution', ax=ax)
-        ax.grid(True)
-        ax.set_xlabel('Velocity')
-        ax.set_ylabel('Density')
-        ax.legend()
-        fig.savefig(os.path.join(self.dir_path, 'velocity_distribution.png'))
-        
-    def plot_residual(self,residual):
-        fig,ax = plt.subplots()
-        plt.plot(residual,label='Residual')
-        ax.set_xlabel('Iteration')
-        ax.set_ylabel('Residual')
-        ax.legend()
-        fig.savefig(os.path.join(self.dir_path, 'residual.png'))
+###################################################
 
 
-L = 6  # Box volume (L^2)
-N = 150  # Number of particles
+
+#######    RUN SIMULATION    ########################
+
+L = 5  # Box volume (L^2)
+N = 100  # Number of particles
 m = 1  # Particle mass
 r = 0.05  # Particle radius
-V0 = 10  # Initial velocity
-dt = 0.005  # Time step
-num_steps = 1000  # Number of simulation steps
+V0 = 5  # Initial velocity
+dt = 0.001  # Time step
+num_steps = 5000  # Number of simulation steps
 create_gif = False  # Set to True to create the GIF animation
 
 simulation = GasSimulation(L, N, m, r, V0, dt, num_steps, create_gif)
 simulation.simulate()
+
