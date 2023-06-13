@@ -34,7 +34,7 @@ class GasSimulation:
         
 
 
-######################                 UTILS FUNCTIONS             #############################################
+######################                 UTILS             #############################################  
         
     def propeties(self):
         self.energy = sum(0.5*self.m*np.linalg.norm(particle.V)**2 for particle in self.particles)  
@@ -64,7 +64,7 @@ class GasSimulation:
             V = np.array([vx, vy])
             particle = Particle(X, V, self.r, self.m)
 
-            # Check for intersections with existing particles using set
+            # Check for intersections with existing particles 
             is_valid = all(math.sqrt(np.sum((p.X - particle.X) ** 2)) >= 2 * self.r for p in existing_positions)
 
             if is_valid:
@@ -77,7 +77,7 @@ class GasSimulation:
         
 
     def collisions_particles(self):
-        # Create arrays of particle positions and velocities
+
         positions = np.array([particle.X for particle in self.particles])
 
         # Calculate distances between all pairs of particles
@@ -98,7 +98,7 @@ class GasSimulation:
                    
 
     def collisions_walls(self):
-        # Create arrays of particle positions
+
         positions = np.array([particle.X for particle in self.particles])
 
         # Find particles hitting the walls
@@ -117,8 +117,8 @@ class GasSimulation:
                 particle.V[1] = -particle.V[1]
                 momentum_change += self.m * abs(particle.V[1])*2
 
-        pressure = momentum_change/(self.dt*4*self.L)
-        self.pressure_list.append(pressure)
+        self.pressure = momentum_change/(self.dt*4*self.L)
+        self.pressure_list.append(self.pressure)
         
         
 
@@ -178,7 +178,7 @@ class GasSimulation:
         ax.set_xlabel('Velocity')
         ax.set_ylabel('Density')
         ax.legend()
-        fig.savefig(os.path.join(self.dir_path, 'velocity_distribution.png'))
+        fig.savefig(os.path.join(self.dir_path, f'velocity_distribution_N={self.N}_iter={self.num_steps}.png'))
         
         
     def plot_residual(self):
@@ -187,7 +187,7 @@ class GasSimulation:
         ax.set_xlabel('Iteration')
         ax.set_ylabel('Residual')
         ax.legend()
-        fig.savefig(os.path.join(self.dir_path, 'residual.png'))
+        fig.savefig(os.path.join(self.dir_path, f'residual_N={self.N}_iter={self.num_steps}.png'))
 
 
 
@@ -224,13 +224,13 @@ class GasSimulation:
 
 #######    RUN SIMULATION    ########################
 
-L = 5  # Box volume (L^2)
-N = 100  # Number of particles
+L = 7  # Box volume (L^2)
+N = 1000  # Number of particles
 m = 1  # Particle mass
 r = 0.05  # Particle radius
 V0 = 5  # Initial velocity
 dt = 0.001  # Time step
-num_steps = 5000  # Number of simulation steps
+num_steps = 1000  # Number of simulation steps
 create_gif = False  # Set to True to create the GIF animation
 
 simulation = GasSimulation(L, N, m, r, V0, dt, num_steps, create_gif)
